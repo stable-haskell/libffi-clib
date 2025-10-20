@@ -74,6 +74,7 @@ jobs:
       run: |
         set -eux
         cabal update
+        autoreconf -i
         cabal check
         cabal sdist all
         cabal unpack ./dist-newstyle/sdist/libffi-clib-*.tar.gz
