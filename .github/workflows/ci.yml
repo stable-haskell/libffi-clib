@@ -1,0 +1,95 @@
+name: Haskell CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macOS-13, windows-latest]
+        ghc: ['9.4', '9.6', '9.8', '9.10', '9.12']
+        include:
+          - os: ubuntu-latest
+            ghc: '8.10'
+          - os: ubuntu-latest
+            ghc: '9.0'
+          - os: ubuntu-latest
+            ghc: '9.2'
+          - os: macOS-latest
+            ghc: "9.4"
+          - os: macOS-latest
+            ghc: "9.6"
+          - os: macOS-latest
+            ghc: "9.8"
+          - os: macOS-latest
+            ghc: "9.10"
+          - os: macOS-latest
+            ghc: "9.12"
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: msys2/setup-msys2@v2
+      if: matrix.os == 'windows-latest'
+      with:
+        update: true
+        install: >-
+          autotools
+          curl
+          gettext
+          gettext-devel
+          libtool
+          tar
+          xz
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get -y update
+        sudo apt-get -y install libtinfo6 libncurses6 autopoint
+
+    - name: Set up Homebrew
+      if: runner.os == 'macOS'
+      id: set-up-homebrew
+      uses: Homebrew/actions/setup-homebrew@master
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install autoconf autoconf-archive automake gettext libtool
+        brew link libtool
+
+    - uses: haskell/ghcup-setup@v1
+      with:
+        ghc: ${{ matrix.ghc }}
+        cabal: latest
+
+    - name: Build
+      run: |
+        set -eux
+        cabal update
+        cabal check
+        cabal sdist all
+        cabal unpack ./dist-newstyle/sdist/libffi-clib-*.tar.gz
+        cd libffi-clib-*/
+        autoreconf -i
+        cabal build
+      shell: bash
+
+  i386:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run build (32 bit linux)
+        uses: docker://hasufell/i386-alpine-haskell:3.12
+        with:
+          args: sh -c "apk add gettext gettext-dev autoconf automake libtool && cabal update && autoreconf -i && cabal build"
+
