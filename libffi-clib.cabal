@@ -1,6 +1,8 @@
 cabal-version:      3.12
 name:               libffi-clib
 version:            3.5.2
+synopsis:           libffi clibs
+description:        C source code for the libffi package
 license:            MIT
 author:             Julian Ospald
 maintainer:         hasufell@posteo.de
@@ -19,7 +21,7 @@ extra-source-files:
     include/ffi.h.in
     include/*.h
     install-sh
-    libffi.buildinfo.in
+    libffi-clib.buildinfo.in
     ltmain.sh
     m4/*.m4
     src/**/*.S
