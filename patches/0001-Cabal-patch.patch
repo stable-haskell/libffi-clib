@@ -1,0 +1,409 @@
+From b39123869f39017259d05d759ddf835090692856 Mon Sep 17 00:00:00 2001
+From: Julian Ospald <hasufell@posteo.de>
+Date: Mon, 20 Oct 2025 22:38:13 +0800
+Subject: [PATCH] Cabal patch
+
+---
+ configure.ac   | 76 +++--------------------------------------
+ configure.host | 91 +++++++++++++++++++++++++-------------------------
+ 2 files changed, 50 insertions(+), 117 deletions(-)
+
+diff --git a/configure.ac b/configure.ac
+index dcfc7b2..318e6a4 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -21,8 +21,6 @@ esac
+ 
+ AX_ENABLE_BUILDDIR
+ 
+-AM_INIT_AUTOMAKE
+-
+ # The same as in boehm-gc and libstdc++. Have to borrow it from there.
+ # We must force CC to /not/ be precious variables; otherwise
+ # the wrong, non-multilib-adjusted value will be used in multilibs.
+@@ -47,8 +45,6 @@ AC_PROG_EGREP
+ LT_INIT
+ AC_CONFIG_MACRO_DIR([m4])
+ 
+-AC_CHECK_TOOLS([READELF], [readelf greadelf])
+-
+ # Test for 64-bit build.
+ AC_CHECK_SIZEOF([size_t])
+ 
+@@ -75,10 +71,6 @@ AM_MAINTAINER_MODE
+ AC_CHECK_HEADERS(sys/memfd.h)
+ AC_CHECK_FUNCS([memfd_create])
+ 
+-dnl The -no-testsuite modules omit the test subdir.
+-AM_CONDITIONAL(TESTSUBDIR, test -d $srcdir/testsuite)
+-
+-TARGETDIR="unknown"
+ HAVE_LONG_DOUBLE_VARIANT=0
+ 
+ . ${srcdir}/configure.host
+@@ -319,12 +311,6 @@ if test "x$GCC" = "xyes"; then
+   fi
+ fi
+ 
+-AC_ARG_ENABLE(docs,
+-              AS_HELP_STRING([--disable-docs],[Disable building of docs (default: no)]),
+-              [enable_docs=no],
+-              [enable_docs=yes])
+-AM_CONDITIONAL(BUILD_DOCS, [test x$enable_docs = xyes])
+-
+ AH_BOTTOM([
+ #ifdef HAVE_HIDDEN_VISIBILITY_ATTRIBUTE
+ #ifdef LIBFFI_ASM
+@@ -347,16 +333,8 @@ AH_BOTTOM([
+ 
+ AC_SUBST(TARGET)
+ AC_SUBST(TARGETDIR)
+-
+-changequote(<,>)
+-TARGET_OBJ=
+-for i in $SOURCES; do
+-  TARGET_OBJ="${TARGET_OBJ} src/${TARGETDIR}/"`echo $i | sed 's/[cS]$/lo/'`
+-done
+-changequote([,])
+-AC_SUBST(TARGET_OBJ)
+-
+-AC_SUBST(SHELL)
++AC_SUBST([EXTRA_SOURCES],[` printf " %s " "$SOURCES" | sed -E "s/ ([[^ ]]+)/src\/$TARGETDIR\/\1 /g" `])
++AC_SUBST([EXTRA_ASM_SOURCES],[` printf " %s " "$ASM_SOURCES" | sed -E "s/ ([[^ ]]+)/src\/$TARGETDIR\/\1 /g" `])
+ 
+ AC_ARG_ENABLE(debug,
+ [  --enable-debug          debugging mode],
+@@ -405,57 +383,13 @@ AC_ARG_ENABLE(purify-safety,
+     AC_DEFINE(USING_PURIFY, 1, [Define this if you are using Purify and want to suppress spurious messages.])
+   fi)
+ 
+-AC_ARG_ENABLE(multi-os-directory,
+-[  --disable-multi-os-directory
+-                          disable use of gcc --print-multi-os-directory to change the library installation directory])
+-
+-# These variables are only ever used when we cross-build to X86_WIN32.
+-# And we only support this with GCC, so...
+-if test "x$GCC" = "xyes"; then
+-  if test -n "$with_cross_host" &&
+-     test x"$with_cross_host" != x"no"; then
+-    toolexecdir='${exec_prefix}'/'$(target_alias)'
+-    toolexeclibdir='${toolexecdir}'/lib
+-  else
+-    toolexecdir='${libdir}'/gcc-lib/'$(target_alias)'
+-    toolexeclibdir='${libdir}'
+-  fi
+-  if test x"$enable_multi_os_directory" != x"no"; then
+-    multi_os_directory=`$CC $CFLAGS -print-multi-os-directory`
+-    case $multi_os_directory in
+-      .) ;; # Avoid trailing /.
+-      ../*) toolexeclibdir=$toolexeclibdir/$multi_os_directory ;;
+-    esac
+-  fi
+-  AC_SUBST(toolexecdir)
+-else
+-  toolexeclibdir='${libdir}'
+-fi
+-AC_SUBST(toolexeclibdir)
+-
+-# Conditionalize the makefile for this target machine.
+-tmake_file_=
+-for f in ${tmake_file}; do
+-  if test -f ${srcdir}/src/$TARGETDIR/$f; then
+-     tmake_file_="${tmake_file_} \$(srcdir)/src/$TARGETDIR/$f"
+-  fi
+-done
+-tmake_file="${tmake_file_}"
+-AC_SUBST(tmake_file)
+-
+ # Check linker support.
+ LIBFFI_ENABLE_SYMVERS
+ 
+-AC_CONFIG_COMMANDS(include, [test -d include || mkdir include])
+-AC_CONFIG_COMMANDS(src, [
+-test -d src || mkdir src
+-test -d src/$TARGETDIR || mkdir src/$TARGETDIR
+-], [TARGETDIR="$TARGETDIR"])
++AC_CONFIG_FILES(include/ffi.h)
+ 
+-AC_CONFIG_FILES(include/Makefile include/ffi.h Makefile testsuite/Makefile man/Makefile doc/Makefile libffi.pc)
++AC_SUBST([EXTRA_LIBS],[` printf " %s " "$LIBS" | sed -E 's/ -l([[^ ]]*)/\1 /g' `])
++AC_CONFIG_FILES([libffi-clib.buildinfo])
+ 
+ AC_OUTPUT
+ 
+-# Copy this file instead of using AC_CONFIG_LINK in order to support
+-# compiling with MSVC, which won't understand cygwin style symlinks.
+-cp ${srcdir}/src/$TARGETDIR/ffitarget.h include/ffitarget.h
+diff --git a/configure.host b/configure.host
+index 4e10c3e..4e28fdd 100644
+--- a/configure.host
++++ b/configure.host
+@@ -15,19 +15,19 @@ case "${host}" in
+ 
+   aarch64*-*-*)
+ 	TARGET=AARCH64; TARGETDIR=aarch64
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   alpha*-*-*)
+ 	TARGET=ALPHA; TARGETDIR=alpha;
+ 	# Support 128-bit long double, changeable via command-line switch.
+ 	HAVE_LONG_DOUBLE='defined(__LONG_DOUBLE_128__)'
+-	SOURCES="ffi.c osf.S"
++	SOURCES="ffi.c"; ASM_SOURCES="osf.S"
+ 	;;
+ 
+   arc*-*-*)
+ 	TARGET=ARC; TARGETDIR=arc
+-	SOURCES="ffi.c arcompact.S"
++	SOURCES="ffi.c"; ASM_SOURCES="arcompact.S"
+ 	;;
+ 
+   arm*-*-cygwin* | arm*-*-msys* | arm*-*-mingw* | arm*-*-win* )
+@@ -39,45 +39,45 @@ case "${host}" in
+ 
+   arm*-*-*)
+ 	TARGET=ARM; TARGETDIR=arm
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   avr32*-*-*)
+ 	TARGET=AVR32; TARGETDIR=avr32
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   bfin*)
+ 	TARGET=BFIN; TARGETDIR=bfin
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   cris-*-*)
+ 	TARGET=LIBFFI_CRIS; TARGETDIR=cris
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   csky-*-*)
+         TARGET=CSKY; TARGETDIR=csky
+-        SOURCES="ffi.c sysv.S"
++        SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+         ;;
+ 
+   frv-*-*)
+ 	TARGET=FRV; TARGETDIR=frv
+-	SOURCES="ffi.c eabi.S"
++	SOURCES="ffi.c"; ASM_SOURCES="eabi.S"
+ 	;;
+ 
+   hppa*-*-linux* | parisc*-*-linux* | hppa*-*-openbsd*)
+ 	TARGET=PA_LINUX; TARGETDIR=pa
+-	SOURCES="ffi.c linux.S"
++	SOURCES="ffi.c"; ASM_SOURCES="linux.S"
+ 	;;
+   hppa*64-*-hpux*)
+ 	TARGET=PA64_HPUX; TARGETDIR=pa
+-	SOURCES="ffi64.c hpux64.S"
++	SOURCES="ffi64.c"; ASM_SOURCES="hpux64.S"
+ 	;;
+   hppa*-*-hpux*)
+ 	TARGET=PA_HPUX; TARGETDIR=pa
+-	SOURCES="ffi.c hpux32.S"
++	SOURCES="ffi.c"; ASM_SOURCES="hpux32.S"
+ 	;;
+ 
+   i?86-*-freebsd* | i?86-*-openbsd*)
+@@ -133,47 +133,47 @@ case "${host}" in
+ 
+   ia64*-*-*)
+ 	TARGET=IA64; TARGETDIR=ia64
+-	SOURCES="ffi.c unix.S"
++	SOURCES="ffi.c"; ASM_SOURCES="unix.S"
+ 	;;
+ 
+   kvx-*-*)
+ 	TARGET=KVX; TARGETDIR=kvx
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   loongarch64-*-*)
+ 	TARGET=LOONGARCH64; TARGETDIR=loongarch64
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   m32r*-*-*)
+ 	TARGET=M32R; TARGETDIR=m32r
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   m68k-*-*)
+ 	TARGET=M68K; TARGETDIR=m68k
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   m88k-*-*)
+ 	TARGET=M88K; TARGETDIR=m88k
+-	SOURCES="ffi.c obsd.S"
++	SOURCES="ffi.c"; ASM_SOURCES="obsd.S"
+ 	;;
+ 
+   microblaze*-*-*)
+ 	TARGET=MICROBLAZE; TARGETDIR=microblaze
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   moxie-*-*)
+ 	TARGET=MOXIE; TARGETDIR=moxie
+-	SOURCES="ffi.c eabi.S"
++	SOURCES="ffi.c"; ASM_SOURCES="eabi.S"
+ 	;;
+ 
+   metag-*-*)
+ 	TARGET=METAG; TARGETDIR=metag
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   mips-sgi-irix5.* | mips-sgi-irix6.* | mips*-*-rtems*)
+@@ -187,7 +187,7 @@ case "${host}" in
+ 
+   or1k*-*-*)
+ 	TARGET=OR1K; TARGETDIR=or1k
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   powerpc*-*-linux* | powerpc-*-sysv*)
+@@ -228,36 +228,36 @@ case "${host}" in
+ 
+   riscv*-*)
+ 	TARGET=RISCV; TARGETDIR=riscv
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   s390-*-* | s390x-*-*)
+ 	TARGET=S390; TARGETDIR=s390
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   sh-*-* | sh[34]*-*-*)
+ 	TARGET=SH; TARGETDIR=sh
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+   sh64-*-* | sh5*-*-*)
+ 	TARGET=SH64; TARGETDIR=sh64
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ 
+   sparc*-*-*)
+ 	TARGET=SPARC; TARGETDIR=sparc
+-	SOURCES="ffi.c ffi64.c v8.S v9.S"
++	SOURCES="ffi.c ffi64.c"; ASM_SOURCES="v8.S v9.S"
+ 	;;
+ 
+   tile*-*)
+         TARGET=TILE; TARGETDIR=tile
+-	SOURCES="ffi.c tile.S"
++	SOURCES="ffi.c"; ASM_SOURCES="tile.S"
+         ;;
+ 
+   vax-*-*)
+ 	TARGET=VAX; TARGETDIR=vax
+-	SOURCES="ffi.c elfbsd.S"
++	SOURCES="ffi.c"; ASM_SOURCES="elfbsd.S"
+ 	;;
+ 
+   wasm32-*-*)
+@@ -272,7 +272,7 @@ case "${host}" in
+ 
+   xtensa*-*)
+ 	TARGET=XTENSA; TARGETDIR=xtensa
+-	SOURCES="ffi.c sysv.S"
++	SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	;;
+ esac
+ 
+@@ -280,53 +280,52 @@ esac
+ case "${TARGET}" in
+   ARM_WIN32)
+ 	if test "$MSVC" = 1; then
+-		SOURCES="ffi.c sysv_msvc_arm32.S"
++		SOURCES="ffi.c"; ASM_SOURCES="sysv_msvc_arm32.S"
+ 	else
+-		SOURCES="ffi.c sysv.S"
++		SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	fi
+ 	;;
+   ARM_WIN64)
+ 	if test "$MSVC" = 1; then
+-		SOURCES="ffi.c win64_armasm.S"
++		SOURCES="ffi.c"; ASM_SOURCES="win64_armasm.S"
+ 	else
+-		SOURCES="ffi.c sysv.S"
++		SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	fi
+ 	;;
+   MIPS)
+-	SOURCES="ffi.c o32.S n32.S"
++	SOURCES="ffi.c"; ASM_SOURCES="o32.S n32.S"
+ 	;;
+   POWERPC)
+-	SOURCES="ffi.c ffi_sysv.c ffi_linux64.c sysv.S ppc_closure.S"
+-	SOURCES="${SOURCES} linux64.S linux64_closure.S"
++	SOURCES="ffi.c ffi_sysv.c ffi_linux64.c"; ASM_SOURCES="sysv.S ppc_closure.S linux64.S linux64_closure.S"
+ 	;;
+   POWERPC_AIX)
+-	SOURCES="ffi_darwin.c aix.S aix_closure.S"
++	SOURCES="ffi_darwin.c"; ASM_SOURCES="aix.S aix_closure.S"
+ 	;;
+   POWERPC_DARWIN)
+-	SOURCES="ffi_darwin.c darwin.S darwin_closure.S"
++	SOURCES="ffi_darwin.c"; ASM_SOURCES="darwin.S darwin_closure.S"
+ 	;;
+   POWERPC_FREEBSD)
+-	SOURCES="ffi.c ffi_sysv.c sysv.S ppc_closure.S"
++	SOURCES="ffi.c ffi_sysv.c"; ASM_SOURCES="sysv.S ppc_closure.S"
+ 	;;
+   X86 | X86_DARWIN | X86_FREEBSD | X86_WIN32)
+ 	if test "$MSVC" = 1; then
+-		SOURCES="ffi.c sysv_intel.S"
++		SOURCES="ffi.c"; ASM_SOURCES="sysv_intel.S"
+ 	else
+-		SOURCES="ffi.c sysv.S"
++		SOURCES="ffi.c"; ASM_SOURCES="sysv.S"
+ 	fi
+ 	;;
+   X86_64)
+ 	if test x"$TARGET_X32" = xyes; then
+-		SOURCES="ffi64.c unix64.S"
++		SOURCES="ffi64.c"; ASM_SOURCES="unix64.S"
+ 	else
+-		SOURCES="ffi64.c unix64.S ffiw64.c win64.S"
++		SOURCES="ffi64.c"; ASM_SOURCES="unix64.S ffiw64.c win64.S"
+ 	fi
+ 	;;
+   X86_WIN64)
+ 	if test "$MSVC" = 1; then
+-		SOURCES="ffiw64.c win64_intel.S"
++		SOURCES="ffiw64.c"; ASM_SOURCES="win64_intel.S"
+ 	else
+-		SOURCES="ffiw64.c win64.S"
++		SOURCES="ffiw64.c"; ASM_SOURCES="win64.S"
+ 	fi
+ 	;;
+ esac
+-- 
+2.51.0
+
