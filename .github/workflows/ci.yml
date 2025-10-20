@@ -36,7 +36,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - uses: msys2/setup-msys2@v2
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
       with:
         update: true
         install: >-
@@ -52,7 +52,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get -y update
-        sudo apt-get -y install libtinfo6 libncurses6 autopoint
+        sudo apt-get -y install libtinfo6 libncurses6 autopoint libltdl-dev
 
     - name: Set up Homebrew
       if: runner.os == 'macOS'
@@ -70,9 +70,22 @@ jobs:
         ghc: ${{ matrix.ghc }}
         cabal: latest
 
-    - name: Build
+    - if: runner.os == 'Windows'
+      shell: msys2 {0}
       run: |
-        set -eux
+        autoreconf -i
+
+    - if: runner.os == 'Windows'
+      name: Build (windows)
+      run: |
+        cabal update
+        cabal check
+        cabal sdist all
+        cabal build
+
+    - if: runner.os != 'Windows'
+      name: Build (unix/mac)
+      run: |
         cabal update
         autoreconf -i
         cabal check
