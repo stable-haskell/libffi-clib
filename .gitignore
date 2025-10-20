@@ -2,4 +2,4 @@ autom4te.cache/
 configure
 dist-newstyle/
 /libffi-*/
-libffi-3.5.2.tar.gz
+libffi-*.tar.gz
