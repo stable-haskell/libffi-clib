@@ -1,6 +1,6 @@
 cabal-version:      3.12
 name:               libffi-clib
-version:            3.7.1
+version:            3.8.0
 synopsis:           libffi clibs
 description:        C source code for the libffi package
 license:            MIT
